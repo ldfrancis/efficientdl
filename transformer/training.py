@@ -8,10 +8,11 @@ def get_device():
 
 
 def infer(transformer, data):
-    x_src = data["en"]
-    x_trg = data["fr_in"]
-    src_mask = data["src_mask"]
-    trg_mask = data["trg_mask"]
+    device = get_device()
+    x_src = data["en"].to(device)
+    x_trg = data["fr_in"].to(device)
+    src_mask = data["src_mask"].to(device)
+    trg_mask = data["trg_mask"].to(device)
     x_enc = transformer.encode(x_src, src_mask)
     logits = transformer.decode(x_trg, x_enc, trg_mask, src_mask)
     return logits
@@ -19,12 +20,13 @@ def infer(transformer, data):
 
 def translate(transformer, batch, src_tokenizer, trg_tokenizer, max_len=10):
     # encode
-    x_src = batch["en"]
+    device = get_device()
+    x_src = batch["en"].to(device)
     b_size = x_src.shape[0]
-    src_mask = batch["src_mask"]
+    src_mask = batch["src_mask"].to(device)
     x_enc = transformer.encode(x_src, src_mask)
-    x_trg = torch.ones((b_size, 1)).long()
-    trg_mask = torch.ones((b_size, 1,1)).float()
+    x_trg = torch.ones((b_size, 1)).long().to(device)
+    trg_mask = torch.ones((b_size, 1,1)).float().to(device)
     dones = torch.zeros((b_size,))
     printed = torch.zeros((b_size,))
     for i in range(max_len):
@@ -70,6 +72,7 @@ def validate(transformer, val_dataloader, loss_fn, src_tokenizer, trg_tokenizer)
 
 def train_one_epoch(transformer, train_dataloader, loss_fn, optimizer, epoch=1):
     train_loss = 0
+    transformer.train()
     progress_bar = tqdm(
         total=len(train_dataloader),
         ncols=100,
@@ -132,7 +135,7 @@ if __name__=="__main__":
     batch_size = 64
     src_vocab_size = train_dataset.en_tokenizer.get_vocab_size()
     trg_vocab_size = train_dataset.fr_tokenizer.get_vocab_size()
-    transformer = build_transformer(6, 512, 8, 0.1, src_vocab_size, trg_vocab_size)
+    transformer = build_transformer(6, 512, 8, 0.1, src_vocab_size, trg_vocab_size).to(get_device())
     optimizer = Adam(transformer.parameters())
     scheduler = ReduceLROnPlateau(optimizer, patience=5)
     loss_fn = NLLLoss(ignore_index=0)
