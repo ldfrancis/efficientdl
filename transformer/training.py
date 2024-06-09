@@ -55,11 +55,12 @@ def validate(transformer, val_dataloader, loss_fn, src_tokenizer, trg_tokenizer)
     val_loss = 0
     progress_bar = tqdm(total=len(val_dataloader), ncols=100, desc="Validating")
     transformer.eval()
+    device = get_device()
     with torch.no_grad():
         for i,batch in enumerate(val_dataloader):
             logits = infer(transformer, batch)
             log_likelihood = log_softmax(logits, dim=-1)
-            loss = loss_fn(log_likelihood.transpose(1,2), batch["fr_out"])
+            loss = loss_fn(log_likelihood.transpose(1,2), batch["fr_out"].to(device))
             val_loss = val_loss + (1/(i+1))*(loss.item() - val_loss)
             progress_bar.set_postfix(
                 loss = f"{val_loss:.2f}"
@@ -73,13 +74,14 @@ def validate(transformer, val_dataloader, loss_fn, src_tokenizer, trg_tokenizer)
 def train_one_epoch(transformer, train_dataloader, loss_fn, optimizer, epoch=1):
     train_loss = 0
     transformer.train()
+    device = get_device()
     progress_bar = tqdm(
         total=len(train_dataloader),
         ncols=100,
         desc=f'Training|Epoch-{epoch}'
     )
     for i,batch in enumerate(train_dataloader):
-        target = batch["fr_out"]
+        target = batch["fr_out"].to(device)
         logits = infer(transformer, batch)
         optimizer.zero_grad()
         logits = infer(transformer, batch)
