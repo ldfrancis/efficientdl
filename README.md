@@ -1,2 +1,2 @@
-# efficientDL
+# efficientdl
 Efficient Deep Learning
