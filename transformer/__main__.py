@@ -86,6 +86,7 @@ if __name__=="__main__":
                 train_loss += (loss.item()-train_loss)/step
                 pbar.set_postfix(
                     {
+                        "Epoch": epoch,
                         "time": f"{(time.time()-t0)*1000:.2f}ms",
                         "loss": f"{train_loss:.2f}",
                     }
@@ -112,6 +113,24 @@ if __name__=="__main__":
                         {"Epoch": epoch, "loss": f"{val_loss:.2f}"}
                     )
                     pbar.update(1)
+
+                # translate
+                B, _ = batch["en"].shape
+                x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
+                x_dec = torch.ones((B,1))
+                max_len = 512
+                dones = torch.zeros(B).bool()
+                for s in range(512):
+                    logits = model.decode(x_dec, x_enc, batch["trg_mask"].to(device), batch["src_mask"].to(device))
+                    pred = torch.argmax(logits[:,-1,:], dim=-1, keepdim=True)
+                    x_dec = torch.cat([x_dec, pred], dim=1)
+                    dones = dones | (pred == 2).squeeze()
+                    if torch.sum(dones).item() == B:
+                        break
+
+                for b in range(B):
+                    tqdm.write(val_dataset.fr_tokenizer.decode(x_dec[b].tolist()))
+
 
 
 
