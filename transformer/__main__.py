@@ -59,7 +59,7 @@ if __name__=="__main__":
     device = "cuda"
     mode = torch.compile(model)
     model.to(device)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.AdamW(model.parameters(), t_config.lr)
     
     for batch in train_dataloader:
