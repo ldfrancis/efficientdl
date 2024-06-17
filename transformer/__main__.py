@@ -21,7 +21,7 @@ class ModelConfig:
 
 @dataclass
 class TrainConfig:
-    lr: float = 1e-5
+    lr: float = 3e-4
 
 @dataclass
 class DatasetConfig:
@@ -59,33 +59,20 @@ if __name__=="__main__":
     steps = 0
     t0 = time.time()
     device = "cuda"
-    mode = torch.compile(model)
     model.to(device)
+    mode = torch.compile(model)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.AdamW(model.parameters(), t_config.lr)
     
     epochs = 100
     for epoch in range(epochs):
+        train_loss = 0
+        step = 0
+        n_steps = len(train_dataloader)
         # one epoch training
-        for batch in tqdm(train_dataloader, desc="Train"):
-            x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
-            logits = model.decode(
-                batch["fr_in"].to(device),
-                x_enc, batch["trg_mask"].to(device),
-                batch["src_mask"].to(device)
-            )
-            steps += 1
-            optimizer.zero_grad()
-            loss = loss_fn(logits.view((-1, 30000)), batch["fr_out"].to(device).view((-1)))
-            loss.backward()
-            optimizer.step()
-            tqdm.write(f"step: {steps} time: {(time.time()-t0)*1000:.2f}ms loss:{loss.item():.2f}\r")
-            t0 = time.time()
-            
-        # validation
-        with torch.no_grad():
-            val_loss = 0
-            for batch in tqdm(val_dataloader, desc="Validation"):
+        with tqdm(total=len(train_dataloader)) as pbar:
+            for batch in train_dataloader:
+                optimizer.zero_grad()
                 x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
                 logits = model.decode(
                     batch["fr_in"].to(device),
@@ -93,8 +80,38 @@ if __name__=="__main__":
                     batch["src_mask"].to(device)
                 )
                 loss = loss_fn(logits.view((-1, 30000)), batch["fr_out"].to(device).view((-1)))
-                val_loss += (loss.item())/len(val_dataloader)
-                tqdm.write(f"Epoch: {epoch} | loss: {val_loss:.2f}")
+                loss.backward()
+                optimizer.step()
+                step += 1
+                train_loss += (loss.item()-train_loss)/step
+                pbar.set_postfix(
+                    {
+                        "time": f"{(time.time()-t0)*1000:.2f}ms",
+                        "loss": f"{train_loss:.2f}",
+                    }
+                )
+                pbar.update(1)
+                t0 = time.time()
+            
+        # validation
+        with torch.no_grad():
+            val_loss = 0
+            step = 0
+            with tqdm(total=len(val_dataloader), desc="Validation") as pbar:
+                for batch in val_dataloader:
+                    x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
+                    logits = model.decode(
+                        batch["fr_in"].to(device),
+                        x_enc, batch["trg_mask"].to(device),
+                        batch["src_mask"].to(device)
+                    )
+                    loss = loss_fn(logits.view((-1, 30000)), batch["fr_out"].to(device).view((-1)))
+                    step += 1
+                    val_loss += (loss.item()-val_loss)/step
+                    pbar.set_postfix(
+                        {"Epoch": epoch, "loss": f"{val_loss:.2f}"}
+                    )
+                    pbar.update(1)
 
 
 
