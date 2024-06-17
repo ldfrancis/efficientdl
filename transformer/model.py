@@ -53,10 +53,7 @@ class ScaledDotProductAttention(nn.Module):
         d_k = Q.size(-1)
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)
         if attn_mask is not None:
-            try:
-                scores.masked_fill_(attn_mask==0, -1e9)
-            except:
-                breakpoint()
+            scores.masked_fill_(attn_mask==0, -1e9)
         attn = F.softmax(scores, dim=-1)
         self.attn = attn
         context = torch.matmul(attn, V)
@@ -83,10 +80,8 @@ class MultiHeadAttention(nn.Module):
         K = self.W_K(K).view(B, K.size(1), self.n_heads, self.d_h).transpose(1,2)
         V = self.W_V(V).view(B, V.size(1), self.n_heads, self.d_h).transpose(1,2)
         context_heads = self.sdpa(Q, K, V, attn_mask.unsqueeze(1))
-        try:
-            context = context_heads.transpose(1,2).contiguous().view(B, Q.size(2), self.d_model)
-        except:
-            breakpoint()
+        context = context_heads.transpose(1,2).contiguous().view(B, Q.size(2), self.d_model)
+        breakpoint()
         return self.W_O(context)
 
 
@@ -101,6 +96,18 @@ class PositionWiseFeedForward(nn.Module):
     def forward(self, x):
         x = F.relu(self.W1(x))
         return self.W2(x)
+    
+
+class LayerNorm(nn.Module):
+    def __init__(self, d_model, eps=1e-6):
+        self.eps = eps
+        self.alpha = nn.Parameter(torch.ones(d_model))
+        self.bias = nn.Parameter(torch.zeros(d_model))
+
+    def forward(self, x):
+        mean = x.mean(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True)
+        return self.alpha*(x-mean)/(std + self.eps) + self.bias
 
 
 # Encoder Block
@@ -110,8 +117,8 @@ class EncoderBlock(nn.Module):
         self.d_model = d_model
         self.mha = MultiHeadAttention(n_heads, d_model)
         self.pos_ffn = PositionWiseFeedForward(d_model)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
         self.dropout = nn.Dropout1d(dropout)
 
     def forward(self, x, mask):
@@ -129,7 +136,7 @@ class Encoder(nn.Module):
         self.blocks = nn.ModuleList(
             [EncoderBlock(d_model, n_heads, dropout) for _ in range(n_layers)]
         )
-        self.norm = nn.LayerNorm(d_model)
+        self.norm = LayerNorm(d_model)
         self.dropout = nn.Dropout1d(dropout)
 
     def forward(self, x, mask)->torch.Tensor:
@@ -147,9 +154,9 @@ class DecoderBlock(nn.Module):
         self.mha1 = MultiHeadAttention(n_heads, d_model)
         self.mha2 = MultiHeadAttention(n_heads, d_model)
         self.pos_ffn = PositionWiseFeedForward(d_model)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.norm3 = nn.LayerNorm(d_model)
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+        self.norm3 = LayerNorm(d_model)
         self.dropout = nn.Dropout1d(dropout)
 
     def forward(self, x, x_enc, trg_mask, enc_mask):
@@ -168,7 +175,7 @@ class Decoder(nn.Module):
         self.blocks = nn.ModuleList(
             [DecoderBlock(d_model, n_heads, dropout) for _ in range(n_layers)]
         )
-        self.norm = nn.LayerNorm(d_model)
+        self.norm = LayerNorm(d_model)
         self.dropout = nn.Dropout1d(dropout)
 
     def forward(self, x, x_enc, trg_mask, enc_mask):
