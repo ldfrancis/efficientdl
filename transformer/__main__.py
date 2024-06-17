@@ -65,9 +65,9 @@ if __name__=="__main__":
     optimizer = optim.AdamW(model.parameters(), t_config.lr)
     
     epochs = 100
-    for epoch in tqdm(range(epochs)):
+    for epoch in range(epochs):
         # one epoch training
-        for batch in train_dataloader:
+        for batch in tqdm(train_dataloader, desc="Train"):
             x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
             logits = model.decode(
                 batch["fr_in"].to(device),
@@ -79,10 +79,22 @@ if __name__=="__main__":
             loss = loss_fn(logits.view((-1, 30000)), batch["fr_out"].to(device).view((-1)))
             loss.backward()
             optimizer.step()
-            tqdm.write(f"step: {steps} time: {(time.time()-t0)*1000:.2f}ms loss:{loss.item()}")
+            tqdm.write(f"step: {steps} time: {(time.time()-t0)*1000:.2f}ms loss:{loss.item():.2f}\r")
             t0 = time.time()
-            if steps == 50:
-                break
+            
+        # validation
+        with torch.no_grad():
+            val_loss = 0
+            for batch in tqdm(val_dataloader, desc="Validation"):
+                x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
+                logits = model.decode(
+                    batch["fr_in"].to(device),
+                    x_enc, batch["trg_mask"].to(device),
+                    batch["src_mask"].to(device)
+                )
+                loss = loss_fn(logits.view((-1, 30000)), batch["fr_out"].to(device).view((-1)))
+                val_loss += (loss.item())/len(val_dataloader)
+                tqdm.write(f"Epoch: {epoch} | loss: {val_loss:.2f}")
 
 
 
