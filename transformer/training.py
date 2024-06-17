@@ -18,7 +18,7 @@ def infer(transformer, data):
     return logits
 
 
-def translate(transformer, batch, src_tokenizer, trg_tokenizer, max_len=10):
+def translate(transformer, batch, src_tokenizer, trg_tokenizer, max_len=512):
     # encode
     device = get_device()
     x_src = batch["en"].to(device)
@@ -132,8 +132,8 @@ if __name__=="__main__":
     from torch.nn import NLLLoss
     from torch.optim import Adam
     from torch.optim.lr_scheduler import ReduceLROnPlateau
-    train_dataset = EnFrDataset("train", context_len=10)
-    val_dataset = EnFrDataset("validation", context_len=10)
+    train_dataset = EnFrDataset("train", context_len=512)
+    val_dataset = EnFrDataset("validation", context_len=512)
     batch_size = 64
     src_vocab_size = train_dataset.en_tokenizer.get_vocab_size()
     trg_vocab_size = train_dataset.fr_tokenizer.get_vocab_size()

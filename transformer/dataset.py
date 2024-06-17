@@ -101,6 +101,7 @@ if __name__=="__main__":
         dataloader = create_dataloader(sp)
         start_time = time.time()
         for batch in dataloader:
+            breakpoint()
             src = batch["en"]
         print(f"Processing took {time.time()-start_time:.2f} seconds for split {sp}")
         
