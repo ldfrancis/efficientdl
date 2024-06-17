@@ -81,7 +81,6 @@ class MultiHeadAttention(nn.Module):
         V = self.W_V(V).view(B, V.size(1), self.n_heads, self.d_h).transpose(1,2)
         context_heads = self.sdpa(Q, K, V, attn_mask.unsqueeze(1))
         context = context_heads.transpose(1,2).contiguous().view(B, Q.size(2), self.d_model)
-        breakpoint()
         return self.W_O(context)
 
 
