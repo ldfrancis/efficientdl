@@ -60,12 +60,19 @@ if __name__=="__main__":
     t0 = time.time()
     device = "cuda"
     model.to(device)
-    mode = torch.compile(model)
+    # mode = torch.compile(model)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.AdamW(model.parameters(), t_config.lr)
+
+    with open("train_log.txt", "w") as f:
+        pass
+    
+    with open("val_log.txt", "w") as f:
+        pass
     
     epochs = 100
-    for epoch in range(epochs):
+    best_val = 1e9
+    for epoch in range(1,epochs+1):
         train_loss = 0
         step = 0
         n_steps = len(train_dataloader)
@@ -91,9 +98,37 @@ if __name__=="__main__":
                         "loss": f"{train_loss:.2f}",
                     }
                 )
+                if epoch == 1 and step % 1000 == 0:
+                    torch.save(model.state_dict(), "saved_model.pt")
+
+                if step % 1000 == 0:
+                    # translate
+                    B, _ = batch["en"].shape
+                    x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
+                    x_dec = torch.ones((B,1)).long().to(device)
+                    max_len = 512
+                    dones = torch.zeros(B).bool().to(device)
+                    for s in range(512):
+                        logits = model.decode(x_dec, x_enc, batch["trg_mask"][:,:s+1, :s+1].to(device), batch["src_mask"][:,:s+1,:].to(device))
+                        pred = torch.argmax(logits[:,-1,:], dim=-1, keepdim=True)
+                        x_dec = torch.cat([x_dec, pred], dim=1).long()
+                        dones = dones | (pred == 2).squeeze()
+                        if torch.sum(dones).item() == B:
+                            break
+
+                    with open("train_log.txt", "a") as f:
+                        tqdm.write("\nTranslations:", f)
+                        for b in range(4):
+                            tqdm.write(f"src: {val_dataset.en_tokenizer.decode(batch['en'][b].tolist())}", f)
+                            tqdm.write(f"pred: {val_dataset.fr_tokenizer.decode(x_dec[b].tolist())}", f)
+                            tqdm.write(f"targ: {val_dataset.fr_tokenizer.decode(batch['fr_out'][b].tolist())}", f)
+                            tqdm.write("-----------------------", f)
+
+
+
                 pbar.update(1)
                 t0 = time.time()
-            
+                
         # validation
         with torch.no_grad():
             val_loss = 0
@@ -113,24 +148,33 @@ if __name__=="__main__":
                         {"Epoch": epoch, "loss": f"{val_loss:.2f}"}
                     )
                     pbar.update(1)
+                    
+                if val_loss < best_val:
+                    best_val = val_loss
+                    torch.save(model.state_dict(), "saved_model.pt")
+                    tqdm.write("Saved Best model")
 
                 # translate
                 B, _ = batch["en"].shape
                 x_enc = model.encode(batch["en"].to(device), batch["src_mask"].to(device))
-                x_dec = torch.ones((B,1))
+                x_dec = torch.ones((B,1)).long().to(device)
                 max_len = 512
-                dones = torch.zeros(B).bool()
+                dones = torch.zeros(B).bool().to(device)
                 for s in range(512):
-                    logits = model.decode(x_dec, x_enc, batch["trg_mask"].to(device), batch["src_mask"].to(device))
+                    logits = model.decode(x_dec, x_enc, batch["trg_mask"][:,:s+1, :s+1].to(device), batch["src_mask"][:,:s+1,:].to(device))
                     pred = torch.argmax(logits[:,-1,:], dim=-1, keepdim=True)
-                    x_dec = torch.cat([x_dec, pred], dim=1)
+                    x_dec = torch.cat([x_dec, pred], dim=1).long()
                     dones = dones | (pred == 2).squeeze()
                     if torch.sum(dones).item() == B:
                         break
 
-                for b in range(B):
-                    tqdm.write(val_dataset.fr_tokenizer.decode(x_dec[b].tolist()))
-
+                with open("val_log.txt", "a") as f:
+                    tqdm.write("\nTranslations:", f)
+                    for b in range(4):
+                        tqdm.write(f"src: {val_dataset.en_tokenizer.decode(batch['en'][b].tolist())}", f)
+                        tqdm.write(f"pred: {val_dataset.fr_tokenizer.decode(x_dec[b].tolist())}", f)
+                        tqdm.write(f"targ: {val_dataset.fr_tokenizer.decode(batch['fr_out'][b].tolist())}", f)
+                        tqdm.write("-----------------------", f)
 
 
 
